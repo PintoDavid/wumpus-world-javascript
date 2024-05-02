@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wumpus World</title>
+    <style>
+      /* Estilos CSS para el tablero del juego */
+      body {
+        background-color: beige;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+      }
+
+      .container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      .row {
+        display: flex;
+      }
+
+      .cell {
+        position: relative;
+        width: 50px;
+        height: 50px;
+        border: 1px solid black;
+        text-align: center;
+        line-height: 50px;
+        font-size: 20px;
+        background-color: #8b4513; /* Café oscuro */
+        color: transparent; /* Ocultar contenido */
+      }
+
+      .unexplored {
+        background-color: #8b4513; /* Café oscuro */
+      }
+
+      .adventurer {
+        color: rgb(0, 255, 0);
+        z-index: 2;
+      }
+
+      .gold {
+        color: yellow;
+        z-index: 2;
+      }
+
+      .wumpus {
+        color: pink;
+        z-index: 2;
+      }
+
+      .pit {
+        color: black;
+        z-index: 2;
+      }
+
+      .black-layer {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.8);
+        pointer-events: none;
+        z-index: 1;
+      }
+
+      .show-world .black-layer {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <label for="matrixSize">Selecciona el tamaño de la matriz:</label>
+      <select id="matrixSize">
+        <option value="6">6x6</option>
+        <option value="7">7x7</option>
+        <option value="8">8x8</option>
+        <option value="9">9x9</option>
+        <option value="10">10x10</option>
+        <option value="11">11x11</option>
+        <option value="12">12x12</option>
+      </select>
+      <button onclick="generateWorld()" id="buttonWorldGeneration">
+        Generar Mundo
+      </button>
+      <button onclick="toggleGame()" id="startButton" disabled>
+        Iniciar Partida
+      </button>
+      <button onclick="restartGame()" id="restartButton" disabled>
+        Reiniciar Partida
+      </button>
+      <button onclick="toggleWorldView()" id="toggleWorldButton">
+        Ver Mundo
+      </button>
+    </div>
+    <div class="container">
+      <div>
+        <button onclick="moveAgent('up')" id="moveUpButton" disabled>↑</button
+        ><br />
+        <button onclick="moveAgent('left')" id="moveLeftButton" disabled>
+          ←
+        </button>
+        <button onclick="moveAgent('right')" id="moveRightButton" disabled>
+          →</button
+        ><br />
+        <button onclick="moveAgent('down')" id="moveDownButton" disabled>
+          ↓
+        </button>
+      </div>
+      <div id="game-board"></div>
+    </div>
+    <div id="status-message"></div>
+
+    <script>
+      // Definir constantes
+      const AGENT = "A";
+      const WUMPUS = "W";
+      const PIT = "P";
+      const GOLD = "G";
+      const EMPTY = " ";
+
+      // Variables globales
+      let ROWS = 6;
+      let COLS = 6;
+      let agentRow;
+      let agentCol;
+      let gameStarted = false; // Variable para verificar si el juego ha comenzado
+      let board = []; // Tablero del juego
+      let worldViewEnabled = false; // Variable para verificar si la vista del mundo está activada
+      let exploredCells = []; // Almacena las celdas exploradas
+      let previousCell = null; // Almacena la celda anterior
+
+      // Función para inicializar el tablero con elementos aleatorios
+      function initializeBoard() {
+        board = [];
+        exploredCells = [];
+        let goldPlaced = false; // Variable para verificar si se ha colocado oro
+        for (let i = 0; i < ROWS; i++) {
+          let row = [];
+          for (let j = 0; j < COLS; j++) {
+            let rand = Math.random();
+            if (rand < 0.1) {
+              row.push(WUMPUS); // 10% de probabilidad de Wumpus
+            } else if (rand < 0.2) {
+              row.push(PIT); // 10% de probabilidad de pozo
+            } else if (!goldPlaced && rand < 0.25) {
+              row.push(GOLD); // 5% de probabilidad de oro
+              goldPlaced = true;
+            } else {
+              row.push(EMPTY); // 75% de probabilidad de celda vacía
+            }
+          }
+          board.push(row);
+        }
+
+        // Colocar al agente en una esquina aleatoria
+        let cornerRow = Math.floor(Math.random() * 2) * (ROWS - 1);
+        let cornerCol = Math.floor(Math.random() * 2) * (COLS - 1);
+        board[cornerRow][cornerCol] = AGENT;
+        agentRow = cornerRow;
+        agentCol = cornerCol;
+        exploredCells.push(`${agentRow}-${agentCol}`);
+      }
+
+      // Función para mostrar el tablero en el HTML
+      function renderBoard() {
+        let gameBoard = document.getElementById("game-board");
+        gameBoard.innerHTML = "";
+        for (let i = 0; i < ROWS; i++) {
+          let rowElem = document.createElement("div");
+          rowElem.className = "row";
+          for (let j = 0; j < COLS; j++) {
+            let cellElem = document.createElement("div");
+            cellElem.className = "cell";
+            if (board[i][j] === AGENT) {
+              cellElem.classList.add("adventurer");
+              cellElem.textContent = AGENT;
+            } else if (board[i][j] === GOLD) {
+              cellElem.classList.add("gold");
+              cellElem.textContent = GOLD;
+            } else if (board[i][j] === WUMPUS) {
+              cellElem.classList.add("wumpus");
+              cellElem.textContent = WUMPUS;
+            } else if (board[i][j] === PIT) {
+              cellElem.classList.add("pit");
+              cellElem.textContent = PIT;
+            } else {
+              cellElem.textContent = EMPTY;
+              if (!exploredCells.includes(`${i}-${j}`)) {
+                cellElem.classList.add("unexplored");
+              }
+            }
+            rowElem.appendChild(cellElem);
+            // Agregar capa negra sobre todas las celdas excepto la del agente
+            if (board[i][j] !== AGENT && !exploredCells.includes(`${i}-${j}`)) {
+              let blackLayer = document.createElement("div");
+              blackLayer.className = "black-layer";
+              cellElem.appendChild(blackLayer);
+            }
+          }
+          gameBoard.appendChild(rowElem);
+        }
+      }
+
+      // Función para actualizar las celdas exploradas
+      function updateExploredCells() {
+        let cells = document.querySelectorAll(".cell");
+        cells.forEach((cell) => {
+          let cellRow = cell.parentElement.rowIndex;
+          let cellCol = Array.from(cell.parentElement.children).indexOf(cell);
+          let isExplored = exploredCells.some(
+            (expCell) => expCell === `${cellRow}-${cellCol}`
+          );
+          if (isExplored) {
+            cell.classList.remove("unexplored");
+            let blackLayer = cell.querySelector(".black-layer");
+            if (blackLayer) {
+              blackLayer.remove();
+            }
+          }
+        });
+      }
+
+      // Función para mostrar un mensaje de estado
+      function showStatusMessage(message) {
+        let statusMessage = document.getElementById("status-message");
+        statusMessage.textContent = message;
+      }
+
+      // Función para iniciar o detener el juego
+      function toggleGame() {
+        if (!gameStarted) {
+          // Iniciar el juego
+          gameStarted = true;
+          document.getElementById("startButton").innerText = "Detener Partida";
+          document.getElementById("matrixSize").disabled = true;
+          document.getElementById("moveUpButton").disabled = false;
+          document.getElementById("moveDownButton").disabled = false;
+          document.getElementById("moveLeftButton").disabled = false;
+          document.getElementById("moveRightButton").disabled = false;
+          document.getElementById("restartButton").disabled = true;
+          document.getElementById("buttonWorldGeneration").disabled = true;
+          document.getElementById("toggleWorldButton").disabled = false; // Habilitar el botón Ver Mundo
+          showStatusMessage("");
+        } else {
+          // Detener el juego
+          gameStarted = false;
+          document.getElementById("startButton").innerText = "Iniciar Partida";
+          document.getElementById("matrixSize").disabled = false;
+          document.getElementById("moveUpButton").disabled = true;
+          document.getElementById("moveDownButton").disabled = true;
+          document.getElementById("moveLeftButton").disabled = true;
+          document.getElementById("moveRightButton").disabled = true;
+          document.getElementById("buttonWorldGeneration").disabled = false;
+        }
+      }
+
+      // Función para reiniciar el juego
+      function restartGame() {
+        agentRow = 0;
+        agentCol = 0;
+        exploredCells = [];
+        board = [];
+        previousCell = null; // Reiniciar la celda anterior
+        initializeBoard();
+        renderBoard();
+        toggleGame(); // Detener el juego
+        document.getElementById("restartButton").disabled = true; // Deshabilitar el botón Reiniciar Partida
+      }
+
+      // Función para generar el mundo del juego
+      function generateWorld() {
+        ROWS = parseInt(document.getElementById("matrixSize").value);
+        COLS = ROWS;
+        initializeBoard();
+        renderBoard();
+        document.getElementById("startButton").disabled = false;
+        document.getElementById("restartButton").disabled = true; // Deshabilitar el botón Reiniciar Partida al inicio
+      }
+
+      // Función para mover al agente
+      function moveAgent(direction) {
+        if (!gameStarted) return;
+
+        let newAgentRow = agentRow;
+        let newAgentCol = agentCol;
+
+        // Limpiar posición anterior del agente
+        board[agentRow][agentCol] = EMPTY;
+
+        // Actualizar la posición del agente según la dirección
+        if (direction === "up" && agentRow > 0) {
+          newAgentRow--;
+        } else if (direction === "down" && agentRow < ROWS - 1) {
+          newAgentRow++;
+        } else if (direction === "left" && agentCol > 0) {
+          newAgentCol--;
+        } else if (direction === "right" && agentCol < COLS - 1) {
+          newAgentCol++;
+        }
+
+        // Actualizar la posición del agente en el tablero
+        if (
+          newAgentRow >= 0 &&
+          newAgentRow < ROWS &&
+          newAgentCol >= 0 &&
+          newAgentCol < COLS
+        ) {
+          previousCell = [agentRow, agentCol]; // Almacenar la celda anterior
+          agentRow = newAgentRow;
+          agentCol = newAgentCol;
+
+          // Verificar si el agente ha encontrado el oro
+          if (board[agentRow][agentCol] === GOLD) {
+            showStatusMessage(
+              "¡Felicidades! Has encontrado el oro, regresa de donde viniste. Ahora regresa a casa."
+            );
+            return; // No movemos más al agente
+          }
+
+          // Verificar si el agente ha caído en un pozo o ha sido comido por el Wumpus
+          if (
+            board[agentRow][agentCol] === PIT ||
+            board[agentRow][agentCol] === WUMPUS
+          ) {
+            showStatusMessage(
+              board[agentRow][agentCol] === PIT
+                ? "¡Has caído en un pozo! Perdiste."
+                : "¡Te ha comido el Wumpus! Perdiste."
+            );
+            document.getElementById("restartButton").disabled = false;
+          } else {
+            // Si la celda no es un pozo ni el Wumpus, mover al agente
+            board[agentRow][agentCol] = AGENT;
+            exploredCells.push(`${agentRow}-${agentCol}`);
+            renderBoard();
+            updateExploredCells(); // Actualizar las celdas exploradas
+          }
+        }
+      }
+
+      // Función para habilitar/deshabilitar la vista del mundo
+      function toggleWorldView() {
+        let gameBoard = document.getElementById("game-board");
+        if (worldViewEnabled) {
+          gameBoard.classList.remove("show-world");
+          document.getElementById("toggleWorldButton").innerText = "Ver Mundo";
+        } else {
+          gameBoard.classList.add("show-world");
+          document.getElementById("toggleWorldButton").innerText =
+            "Dejar de Ver Mundo";
+        }
+        worldViewEnabled = !worldViewEnabled;
+        renderBoard();
+      }
+
+      // Iniciar el juego al cargar la página
+      generateWorld();
+    </script>
+  </body>
+</html>
