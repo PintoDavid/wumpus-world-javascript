@@ -120,6 +120,11 @@
     </div>
     <div id="status-message"></div>
 
+    <button onclick="startAI()" id="aiButton" disabled>Solución por IA</button>
+    <button onclick="stepByStep()" id="stepButton" disabled>
+      Paso por paso
+    </button>
+
     <script>
       // Definir constantes
       const AGENT = "A";
@@ -138,6 +143,7 @@
       let worldViewEnabled = false; // Variable para verificar si la vista del mundo está activada
       let exploredCells = []; // Almacena las celdas exploradas
       let previousCell = null; // Almacena la celda anterior
+      let pathToGold = [];
 
       // Función para inicializar el tablero con elementos aleatorios
       function initializeBoard() {
@@ -153,13 +159,68 @@
             } else if (rand < 0.2) {
               row.push(PIT); // 10% de probabilidad de pozo
             } else if (!goldPlaced && rand < 0.25) {
-              row.push(GOLD); // 5% de probabilidad de oro
+              // 5% de probabilidad de oro
+              row.push(GOLD);
               goldPlaced = true;
             } else {
               row.push(EMPTY); // 75% de probabilidad de celda vacía
             }
           }
           board.push(row);
+        }
+
+        // Asegurar que solo se genere una posición para el oro
+        if (!goldPlaced) {
+          let goldRow, goldCol;
+          do {
+            goldRow = Math.floor(Math.random() * ROWS);
+            goldCol = Math.floor(Math.random() * COLS);
+          } while (board[goldRow][goldCol] !== EMPTY);
+
+          // Colocar el oro en la posición aleatoria encontrada
+          board[goldRow][goldCol] = GOLD;
+
+          // Encontrar las posiciones adyacentes a la posición del oro
+          let adjacentCells = [];
+          let directions = [
+            [-1, 0],
+            [1, 0],
+            [0, -1],
+            [0, 1],
+          ];
+          for (let [dx, dy] of directions) {
+            let newRow = goldRow + dx;
+            let newCol = goldCol + dy;
+            if (
+              newRow >= 0 &&
+              newRow < ROWS &&
+              newCol >= 0 &&
+              newCol < COLS &&
+              board[newRow][newCol] === EMPTY
+            ) {
+              adjacentCells.push([newRow, newCol]);
+            }
+          }
+
+          // Colocar un obstáculo en una de las posiciones adyacentes
+          let obstacleIndex = Math.floor(Math.random() * adjacentCells.length);
+          let [obstacleRow, obstacleCol] = adjacentCells[obstacleIndex];
+          let obstacleType = Math.random() < 0.5 ? PIT : WUMPUS; // 50% de probabilidad de pozo y 50% de probabilidad de Wumpus
+          board[obstacleRow][obstacleCol] = obstacleType;
+
+          // Remover la posición del obstáculo seleccionado
+          adjacentCells.splice(obstacleIndex, 1);
+
+          // Colocar un obstáculo adicional si quedan posiciones adyacentes disponibles
+          if (adjacentCells.length > 0) {
+            let extraObstacleIndex = Math.floor(
+              Math.random() * adjacentCells.length
+            );
+            let [extraObstacleRow, extraObstacleCol] =
+              adjacentCells[extraObstacleIndex];
+            let extraObstacleType = obstacleType === PIT ? WUMPUS : PIT; // Colocar el otro tipo de obstáculo
+            board[extraObstacleRow][extraObstacleCol] = extraObstacleType;
+          }
         }
 
         // Colocar al agente en una esquina aleatoria
@@ -169,6 +230,9 @@
         agentRow = cornerRow;
         agentCol = cornerCol;
         exploredCells.push(`${agentRow}-${agentCol}`);
+
+        // Habilitar el botón de solución por IA
+        document.getElementById("aiButton").disabled = false;
       }
 
       // Función para mostrar el tablero en el HTML
@@ -361,6 +425,120 @@
         }
         worldViewEnabled = !worldViewEnabled;
         renderBoard();
+      }
+
+      // Función para activar la solución por IA
+      function startAI() {
+        if (!gameStarted) return;
+
+        // Buscar el mejor camino hacia el oro
+        pathToGold = findPathToGold();
+
+        if (pathToGold.length > 0) {
+          // Habilitar el botón de paso por paso
+          document.getElementById("stepButton").disabled = false;
+          showStatusMessage(
+            "¡Camino hacia el oro encontrado! Presiona el botón 'Paso por paso' para avanzar."
+          );
+        } else {
+          // Mostrar un mensaje si no se encontró un camino hacia el oro
+          showStatusMessage("¡No se encontró un camino hacia el oro!");
+        }
+      }
+
+      // Función para encontrar el mejor camino hacia el oro evitando obstáculos
+      function findPathToGold() {
+        let visited = new Set();
+        let queue = [];
+        let path = {};
+
+        // Encolar la posición inicial del agente
+        queue.push([agentRow, agentCol]);
+        visited.add(`${agentRow}-${agentCol}`);
+
+        // Mientras haya posiciones en la cola
+        while (queue.length > 0) {
+          let [currentRow, currentCol] = queue.shift();
+
+          // Verificar si la posición actual es el oro
+          if (board[currentRow][currentCol] === GOLD) {
+            // Reconstruir el camino desde la posición actual hasta la posición inicial
+            let current = `${currentRow}-${currentCol}`;
+            let pathToGold = [];
+            while (current !== `${agentRow}-${agentCol}`) {
+              pathToGold.unshift([
+                parseInt(current.split("-")[0]),
+                parseInt(current.split("-")[1]),
+              ]);
+              current = path[current];
+            }
+            return pathToGold;
+          }
+
+          // Definir las direcciones de movimiento posibles
+          let directions = [
+            [-1, 0],
+            [1, 0],
+            [0, -1],
+            [0, 1],
+          ];
+
+          // Explorar las celdas adyacentes
+          for (let [dx, dy] of directions) {
+            let newRow = currentRow + dx;
+            let newCol = currentCol + dy;
+
+            // Verificar si la nueva posición es válida y no ha sido visitada
+            if (
+              newRow >= 0 &&
+              newRow < ROWS &&
+              newCol >= 0 &&
+              newCol < COLS &&
+              !visited.has(`${newRow}-${newCol}`) &&
+              board[newRow][newCol] !== PIT &&
+              board[newRow][newCol] !== WUMPUS
+            ) {
+              // Marcar la nueva posición como visitada y agregarla a la cola
+              visited.add(`${newRow}-${newCol}`);
+              queue.push([newRow, newCol]);
+              // Almacenar la ruta hacia la nueva posición
+              path[`${newRow}-${newCol}`] = `${currentRow}-${currentCol}`;
+            }
+          }
+        }
+
+        // Si no se encontró un camino hacia el oro, devolver un arreglo vacío
+        return [];
+      }
+
+      // Función para avanzar paso a paso en la solución por IA
+      function stepByStep() {
+        if (pathToGold.length === 0) {
+          // Si no hay camino encontrado, mostrar un mensaje
+          showStatusMessage("¡No hay un camino hacia el oro!");
+          return;
+        }
+
+        // Obtener el siguiente paso en el camino
+        let nextStep = pathToGold.shift();
+        let [nextRow, nextCol] = nextStep;
+
+        // Mover al agente al siguiente paso
+        agentRow = nextRow;
+        agentCol = nextCol;
+        board[agentRow][agentCol] = AGENT;
+
+        // Renderizar el tablero
+        renderBoard();
+        updateExploredCells(); // Actualizar las celdas exploradas
+
+        // Verificar si el agente ha encontrado el oro
+        if (board[agentRow][agentCol] === GOLD) {
+          showStatusMessage("¡Felicidades! Has encontrado el oro.");
+          // Deshabilitar el botón de paso por paso y habilitar el botón de reiniciar
+          document.getElementById("stepButton").disabled = true;
+          document.getElementById("restartButton").disabled = false;
+        }
       }
 
       // Iniciar el juego al cargar la página
