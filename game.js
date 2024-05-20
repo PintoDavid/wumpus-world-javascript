@@ -32,36 +32,29 @@ document.addEventListener("DOMContentLoaded", () => {
     const hasPit = currentCell.querySelector(".pit") !== null;
     const hasWumpus = currentCell.querySelector(".wumpus") !== null;
     const hasTreasure = currentCell.querySelector(".treasure") !== null;
+    const hasGold = currentCell.querySelector(".gold") !== null;
 
     if (hasPit || hasWumpus) {
-      hasLost = true;
-      document.getElementById("message").innerText = hasPit
-        ? "¡Has caído en el hoyo! ¡Has perdido!"
-        : "¡El Wumpus te ha devorado! ¡Has perdido!";
-      document.getElementById("movePlayer").disabled = true;
-      document.getElementById("resetBtn").classList.remove("hidden");
-    } else if (
-      hasGold &&
-      currentCell.id === `cell-${goldPosition.y}-${goldPosition.x}`
-    ) {
-      hasGold = true;
-      document.getElementById("message").innerText =
-        "¡Felicidades! ¡Tienes el oro!";
-      currentCell.removeChild(currentCell.querySelector(".treasure"));
-      goldPosition = null;
+        hasLost = true;
+        document.getElementById("message").innerText = hasPit
+            ? "¡Has caído en el hoyo! ¡Has perdido!"
+            : "¡El Wumpus te ha devorado! ¡Has perdido!";
+        document.getElementById("movePlayer").disabled = true;
+        document.getElementById("resetBtn").classList.remove("hidden");
+    } else if (hasGold) {
+        document.getElementById("message").innerText =
+            "¡Felicidades! ¡Tienes el oro!";
+        currentCell.removeChild(currentCell.querySelector(".treasure"));
+        goldPosition = null;
     } else if (hasGold && currentCell.id === "cell-0-0") {
-      hasWon = true;
-      document.getElementById("message").innerText =
-        "¡Has regresado al inicio con el oro! ¡Has ganado!";
-      document.getElementById("movePlayer").disabled = true;
-      document.getElementById("resetBtn").classList.remove("hidden");
-    } else if (hasLost && hasGold) {
-      document.getElementById("message").innerText =
-        "¡Felicidades! ¡Tienes el oro!";
-      currentCell.removeChild(currentCell.querySelector(".treasure"));
-      goldPosition = null;
+        hasWon = true;
+        document.getElementById("message").innerText =
+            "¡Has regresado al inicio con el oro! ¡Has ganado!";
+        document.getElementById("movePlayer").disabled = true;
+        document.getElementById("resetBtn").classList.remove("hidden");
     }
-  };
+};
+
 
   const resetGameBtn = document.getElementById("resetBtn");
   resetGameBtn.addEventListener("click", resetGame);
